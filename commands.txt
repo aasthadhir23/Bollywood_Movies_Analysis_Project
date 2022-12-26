@@ -1,0 +1,118 @@
+Command in Neo4j Bloom
+
+- Open Neo4j Bloom in Neo4j Desktop. In Settings, increase the Node query limit to 3,600. In Perspective -> Search phrases, add a Search phrase called match all with the following query:
+
+MATCH p=(a:actor) -->(m:movie) <--(d:director) RETURN p;
+
+Command in Neo4j Browser
+
+1) 
+LOAD CSV WITH HEADERS FROM 'file:///movie.csv' 
+AS row MERGE (m:movie {name: row.name, release_period: row.release_period, remake: row.remake, franchise: row.franchise, genre:row.genre, screens: toInteger(row.screens), revenue: toInteger(row.revenue), budget:toInteger(row.budget)});
+
+CREATE CONSTRAINT ON (m:movie) ASSERT m.name IS UNIQUE;
+
+LOAD CSV WITH HEADERS FROM 'file:///director_movie.csv' 
+AS row MERGE (d:director {name: row.director}) MERGE (m:movie {name: row.movie}) MERGE (d)-[r:direct {new_director: row.new_director}]->(m);
+
+LOAD CSV WITH HEADERS FROM 'file:///actor_movie.csv' 
+AS row MERGE (a:actor {name: row.actor}) MERGE (m:movie {name: row.movie}) MERGE (a)-[r:act_in {new_actor: row.new_actor}]->(m);
+
+CREATE CONSTRAINT ON (a:actor) ASSERT a.name IS UNIQUE;
+CREATE CONSTRAINT ON (d:director) ASSERT d.name IS UNIQUE;
+
+2)
+
+call db.schema.visualization()
+
+3)
+
+MATCH (m:movie) 
+WITH COUNT(m.name) AS total 
+
+MATCH (m:movie) 
+RETURN m.genre, COUNT(DISTINCT(m.name)) as genre_count, 100*COUNT(DISTINCT(m.name))/total as genre_percentage 
+ORDER BY genre_percentage DESC 
+
+4)
+MATCH (a:actor {name: "Aamir Khan"}) --> (m:movie) 
+RETURN sum(m.revenue);
+
+5)
+MATCH (a:actor) --> (m:movie) 
+RETURN a.name, m.name, m.revenue, m.budget, m.revenue/m.budget as rb_ratio 
+ORDER BY m.revenue DESC LIMIT 10;
+
+6)
+MATCH (m:movie) 
+RETURN m.name, m.revenue, m.budget, m.revenue - m.budget AS profit 
+ORDER BY profit LIMIT 10;
+
+7)
+MATCH (a:actor) --> (m:movie {genre: "thriller"}) 
+RETURN a.name, COUNT(DISTINCT(m.name)) AS Thriller 
+ORDER BY Thriller DESC LIMIT 10;
+
+8)
+MATCH p=(a:actor {name: "Emraan Hashmi"}) -->(m:movie) 
+RETURN m.name, m.genre 
+ORDER BY m.genre DESC;
+
+9)
+MATCH (a:actor) --> (m:movie) <-- (d:director) 
+RETURN a.name as actor, d.name AS director, COUNT(DISTINCT(m.name)) AS num_collab 
+ORDER BY num_collab DESC LIMIT 10;
+
+10)
+CALL gds.graph.project.cypher(
+    'bollywood-graph',
+    'MATCH (n) RETURN id(n) AS id',
+    'MATCH (n)--(m) RETURN id(n) AS source, id(m) AS target'
+);
+
+11)
+CALL gds.wcc.stream('bollywood-graph')
+YIELD nodeId, componentId
+RETURN  componentId, COUNT(componentId) as count
+ORDER BY count DESC LIMIT 10;
+
+12)
+CALL gds.wcc.stream('bollywood-graph')
+YIELD nodeId, componentId
+WHERE componentId = 1
+RETURN  DISTINCT(gds.util.asNode(nodeId).name) AS name, componentId ORDER BY name
+
+13)
+CALL gds.wcc.stream('bollywood-graph')
+YIELD nodeId, componentId
+WHERE componentId = 1
+WITH  COLLECT(DISTINCT(gds.util.asNode(nodeId).name)) AS name_list
+
+MATCH path=(a:actor) --> (m:movie) <--(d:director)
+WHERE (a.name IN name_list) AND (m.name IN name_list) AND (d.name IN name_list)
+RETURN path LIMIT 2000;
+
+14)
+MATCH (a:actor) --> (m:movie) <-- (d:director) 
+RETURN a.name as actor, d.name AS director, COUNT(DISTINCT(m.name)) AS num_collab 
+ORDER BY num_collab DESC LIMIT 20;
+
+15)
+MATCH path = (a:actor) --> (m:movie) <-- (d:director) 
+WHERE a.name = "Ajay Devgn" 
+RETURN path;
+
+16)(Graph for command 7)
+MATCH path= (a:actor) --> (m:movie {genre: "thriller"}) 
+WHERE m.genre = "thriller" 
+RETURN path;
+
+17)
+MATCH path= (a:actor) --> (m:movie) 
+WHERE a.name= "Shahrukh Khan"
+RETURN path;
+
+18)(Graph)
+MATCH path= (a:actor) --> (m:movie) <--(d:director)
+WHERE a.name = "Akshay Kumar" OR d.name = "Rohit Shetty"
+RETURN path;
